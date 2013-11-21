@@ -152,11 +152,10 @@ imgs_destroy (void)
 static bool
 mosaic_layout (size_t canvas_wd, size_t thumb_ht, size_t thumb_space)
 {
-	struct img *i;
 	size_t col = 0;
 	size_t row = 0;
 
-	for (i = imgs; i; i = i->next) {
+	for (struct img *i = imgs; i; i = i->next) {
 		while (col + i->thumb_wd > canvas_wd) {
 			if (col == 0) {
 				fprintf(stderr, "Image too large: %s\n", i->filename);
@@ -177,7 +176,6 @@ static bool
 mosaic_render (char *filename, size_t canvas_width, size_t canvas_height)
 {
 	int ret = true;
-	struct img *i;
 	MagickWand *mw = NewMagickWand();
 	PixelWand *pw = NewPixelWand();
 
@@ -187,7 +185,7 @@ mosaic_render (char *filename, size_t canvas_width, size_t canvas_height)
 		ret = false;
 		goto exit;
 	}
-	for (i = imgs; i; i = i->next) {
+	for (struct img *i = imgs; i; i = i->next) {
 		if (MagickCompositeImage(mw, i->mw, OverCompositeOp, i->offs_x, i->offs_y) == MagickFalse) {
 			magick_error(mw);
 			ret = false;
