@@ -48,13 +48,31 @@ int nrows = 1;
 struct img *imgs = NULL;
 struct img *last = NULL;
 
-static int img_add(char*, size_t, int);
-static void imgs_destroy(void);
-static int mosaic_layout(size_t, size_t, size_t);
-static int mosaic_render(char*, size_t, size_t);
-static int mosaic_mapfile(char*);
-static void magick_error(MagickWand*);
-static void print_usage(void);
+static void
+print_usage (void)
+{
+	fputs(
+	"Creates a strip of thumbnail images, and an optional mapfile.\n"
+	"  -o <outfile>   image file to create, default '" DEFAULT_OUTFILE "'\n"
+	"  -m <mapfile>   map file to create, optional\n"
+	"  -h <height>    height of a row in pixels, default " NUM_TO_STR(DEFAULT_HEIGHT) "\n"
+	"  -s <space>     space between thumbnails in pixels, default " NUM_TO_STR(DEFAULT_SPACE) "\n"
+	"  -w <width>     width of a row in pixels, default " NUM_TO_STR(DEFAULT_WIDTH) "\n"
+	"  -v             be verbose\n"
+	"  -?             print this help screen\n"
+	, stderr);
+}
+
+static void
+magick_error (MagickWand *mw)
+{
+	char *desc;
+	ExceptionType severity;
+
+	desc = MagickGetException(mw, &severity);
+	fprintf(stderr, "%s %s %lu %s\n", GetMagickModule(), desc);
+	MagickRelinquishMemory(desc);
+}
 
 static int
 img_add (char *filename, size_t thumb_ht, int verbose)
@@ -292,30 +310,4 @@ main (int argc, char *argv[])
 exit:	imgs_destroy();
 	MagickWandTerminus();
 	return ret;
-}
-
-static void
-print_usage (void)
-{
-	fputs(
-	"Creates a strip of thumbnail images, and an optional mapfile.\n"
-	"  -o <outfile>   image file to create, default '" DEFAULT_OUTFILE "'\n"
-	"  -m <mapfile>   map file to create, optional\n"
-	"  -h <height>    height of a row in pixels, default " NUM_TO_STR(DEFAULT_HEIGHT) "\n"
-	"  -s <space>     space between thumbnails in pixels, default " NUM_TO_STR(DEFAULT_SPACE) "\n"
-	"  -w <width>     width of a row in pixels, default " NUM_TO_STR(DEFAULT_WIDTH) "\n"
-	"  -v             be verbose\n"
-	"  -?             print this help screen\n"
-	, stderr);
-}
-
-static void
-magick_error (MagickWand *mw)
-{
-	char *desc;
-	ExceptionType severity;
-
-	desc = MagickGetException(mw, &severity);
-	fprintf(stderr, "%s %s %lu %s\n", GetMagickModule(), desc);
-	MagickRelinquishMemory(desc);
 }
