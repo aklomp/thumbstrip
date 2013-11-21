@@ -16,7 +16,7 @@
  *
  */
 
-#define _GNU_SOURCE		/* Unlock basename() in string.h */
+#define _GNU_SOURCE		// Unlock basename() in string.h
 #include <stdbool.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -28,7 +28,7 @@
 #define DEFAULT_HEIGHT		28
 #define DEFAULT_WIDTH		732
 #define DEFAULT_SPACE		4
-#define DEFAULT_OUTFILE		"pnm:-"		/* MagickWand code for "PNM to stdout" */
+#define DEFAULT_OUTFILE		"pnm:-"		// MagickWand code for "PNM to stdout"
 
 #define STR_EXPAND(x)		#x
 #define NUM_TO_STR(x)		STR_EXPAND(x)
@@ -99,7 +99,7 @@ img_add (char *filename, size_t thumb_ht, int verbose)
 	i->orig_ht = MagickGetImageHeight(i->mw);
 	i->next = NULL;
 
-	/* Scale down the image: */
+	// Scale down the image:
 	i->thumb_ht = thumb_ht;
 	i->thumb_wd = (i->orig_wd * i->thumb_ht) / i->orig_ht;
 	if (verbose) {
@@ -276,7 +276,7 @@ main (int argc, char *argv[])
 	}
 	MagickWandGenesis();
 
-	/* Open all images, scale them, add to linked list: */
+	// Open all images, scale them, add to linked list:
 	for (; optind < argc; optind++) {
 		if (!img_add(argv[optind], thumb_height, verbose)) {
 			ret = 1;
@@ -288,19 +288,19 @@ main (int argc, char *argv[])
 		print_usage();
 		goto exit;
 	}
-	/* Layout images into rows: */
+	// Layout images into rows:
 	if (!mosaic_layout(canvas_width, thumb_height, thumb_space)) {
 		ret = 1;
 		goto exit;
 	}
 	canvas_height = nrows * thumb_height + (nrows - 1) * thumb_space;
 
-	/* Render output image: */
+	// Render output image:
 	if (!mosaic_render(outfile, canvas_width, canvas_height)) {
 		ret = 1;
 		goto exit;
 	}
-	/* Make mapfile if desired: */
+	// Make mapfile if desired:
 	if (!mosaic_mapfile(mapfile)) {
 		ret = 1;
 		goto exit;
