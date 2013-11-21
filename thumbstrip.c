@@ -17,6 +17,7 @@
  */
 
 #define _GNU_SOURCE		/* Unlock basename() in string.h */
+#include <stdbool.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -74,19 +75,19 @@ magick_error (MagickWand *mw)
 	MagickRelinquishMemory(desc);
 }
 
-static int
+static bool
 img_add (char *filename, size_t thumb_ht, int verbose)
 {
 	struct img *i;
 
 	if ((i = malloc(sizeof(*i))) == NULL) {
 		perror("malloc");
-		return 0;
+		return false;
 	}
 	if ((i->filename = malloc(strlen(filename) + 1)) == NULL) {
 		perror("malloc");
 		free(i);
-		return 0;
+		return false;
 	}
 	strcpy(i->filename, filename);
 	if (verbose) fprintf(stderr, "reading %s\n", i->filename);
@@ -122,13 +123,13 @@ img_add (char *filename, size_t thumb_ht, int verbose)
 	else {
 		last = last->next = i;
 	}
-	return 1;
+	return true;
 
 err:	magick_error(i->mw);
 	DestroyMagickWand(i->mw);
 	free(i->filename);
 	free(i);
-	return 0;
+	return false;
 }
 
 static void
@@ -148,7 +149,7 @@ imgs_destroy (void)
 	}
 }
 
-static int
+static bool
 mosaic_layout (size_t canvas_wd, size_t thumb_ht, size_t thumb_space)
 {
 	struct img *i;
@@ -159,7 +160,7 @@ mosaic_layout (size_t canvas_wd, size_t thumb_ht, size_t thumb_space)
 		while (col + i->thumb_wd > canvas_wd) {
 			if (col == 0) {
 				fprintf(stderr, "Image too large: %s\n", i->filename);
-				return 0;
+				return false;
 			}
 			nrows++;
 			col = 0;
@@ -169,13 +170,13 @@ mosaic_layout (size_t canvas_wd, size_t thumb_ht, size_t thumb_space)
 		i->offs_y = row;
 		col += i->thumb_wd + thumb_space;
 	}
-	return 1;
+	return true;
 }
 
-static int
+static bool
 mosaic_render (char *filename, size_t canvas_width, size_t canvas_height)
 {
-	int ret = 1;
+	int ret = true;
 	struct img *i;
 	MagickWand *mw = NewMagickWand();
 	PixelWand *pw = NewPixelWand();
@@ -183,20 +184,20 @@ mosaic_render (char *filename, size_t canvas_width, size_t canvas_height)
 	PixelSetColor(pw, "white");
 	if (MagickNewImage(mw, canvas_width, canvas_height, pw) == MagickFalse) {
 		magick_error(mw);
-		ret = 0;
+		ret = false;
 		goto exit;
 	}
 	for (i = imgs; i; i = i->next) {
 		if (MagickCompositeImage(mw, i->mw, OverCompositeOp, i->offs_x, i->offs_y) == MagickFalse) {
 			magick_error(mw);
-			ret = 0;
+			ret = false;
 			goto exit;
 		}
 	}
 	if (MagickSetImageCompressionQuality(mw, JPEG_QUALITY) == MagickFalse
 	 || MagickWriteImage(mw, filename) == MagickFalse) {
 		magick_error(mw);
-		ret = 0;
+		ret = false;
 		goto exit;
 	}
 
@@ -205,18 +206,18 @@ exit:	DestroyMagickWand(mw);
 	return ret;
 }
 
-static int
+static bool
 mosaic_mapfile (char *filename)
 {
 	FILE *f;
 	struct img *i;
 
 	if (filename == NULL) {
-		return 1;
+		return true;
 	}
 	if ((f = fopen(filename, "w")) == NULL) {
 		perror("fopen()");
-		return 0;
+		return false;
 	}
 	for (i = imgs; i; i = i->next) {
 		fprintf(f, "%s\t%d\t%d\t%d\t%d\n"
@@ -228,7 +229,7 @@ mosaic_mapfile (char *filename)
 		);
 	}
 	fclose(f);
-	return 1;
+	return true;
 }
 
 int
