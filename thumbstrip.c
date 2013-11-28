@@ -103,7 +103,7 @@ img_add (char *filename, size_t thumb_ht, int verbose)
 	i->thumb_ht = thumb_ht;
 	i->thumb_wd = (i->orig_wd * i->thumb_ht) / i->orig_ht;
 	if (verbose) {
-		fprintf(stderr, "Resizing %s from %dx%d to %dx%d\n"
+		fprintf(stderr, "Resizing %s from %zdx%zd to %zdx%zd\n"
 			, i->filename
 			, i->orig_wd
 			, i->orig_ht
@@ -218,7 +218,7 @@ mosaic_mapfile (char *filename)
 		return false;
 	}
 	for (i = imgs; i; i = i->next) {
-		fprintf(f, "%s\t%d\t%d\t%d\t%d\n"
+		fprintf(f, "%s\t%zd\t%zd\t%zd\t%zd\n"
 			, basename(i->filename)
 			, i->offs_x
 			, i->offs_y
