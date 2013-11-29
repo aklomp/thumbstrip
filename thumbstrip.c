@@ -90,7 +90,7 @@ img_add (char *filename, size_t thumb_ht, int verbose)
 		return false;
 	}
 	strcpy(i->filename, filename);
-	if (verbose) fprintf(stderr, "reading %s\n", i->filename);
+	if (verbose) fprintf(stderr, "Reading %s\n", i->filename);
 	i->mw = NewMagickWand();
 	if (MagickReadImage(i->mw, i->filename) == MagickFalse) {
 		goto err;
@@ -214,7 +214,7 @@ mosaic_mapfile (char *filename)
 		return true;
 	}
 	if ((f = fopen(filename, "w")) == NULL) {
-		perror("fopen()");
+		perror("fopen");
 		return false;
 	}
 	for (i = imgs; i; i = i->next) {
