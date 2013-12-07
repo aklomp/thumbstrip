@@ -67,16 +67,15 @@ print_usage (void)
 static void
 magick_error (MagickWand *mw)
 {
-	char *desc;
 	ExceptionType severity;
 
-	desc = MagickGetException(mw, &severity);
+	char *desc = MagickGetException(mw, &severity);
 	fprintf(stderr, "%s %s %lu %s\n", GetMagickModule(), desc);
 	MagickRelinquishMemory(desc);
 }
 
 static bool
-img_add (char *filename, size_t thumb_ht, int verbose)
+img_add (char *filename, size_t thumb_ht, bool verbose)
 {
 	struct img *i;
 
@@ -208,7 +207,6 @@ static bool
 mosaic_mapfile (char *filename)
 {
 	FILE *f;
-	struct img *i;
 
 	if (filename == NULL) {
 		return true;
@@ -217,7 +215,7 @@ mosaic_mapfile (char *filename)
 		perror("fopen");
 		return false;
 	}
-	for (i = imgs; i; i = i->next) {
+	for (struct img *i = imgs; i; i = i->next) {
 		fprintf(f, "%s\t%zd\t%zd\t%zd\t%zd\n"
 			, basename(i->filename)
 			, i->offs_x
@@ -235,7 +233,7 @@ main (int argc, char *argv[])
 {
 	int opt;
 	int ret = 0;
-	int verbose = 0;
+	bool verbose = false;
 	char *mapfile = NULL;
 	char *outfile = DEFAULT_OUTFILE;
 	size_t thumb_space = DEFAULT_SPACE;
@@ -266,7 +264,7 @@ main (int argc, char *argv[])
 				break;
 
 			case 'v':
-				verbose = 1;
+				verbose = true;
 				break;
 
 			case '?':
