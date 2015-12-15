@@ -1,9 +1,16 @@
-CFLAGS += -std=c99 -Wall -Wextra -pedantic
+CFLAGS  += -std=c99 -Wall -Wextra -pedantic
+CFLAGS  += $(shell pkg-config --cflags MagickWand)
+LDFLAGS += $(shell pkg-config --libs   MagickWand)
 
-.PHONY: clean
+.PHONY: analyze clean
 
-thumbstrip: thumbstrip.c
-	$(CC) $(CFLAGS) -o $@ $^ `pkg-config --cflags --libs MagickWand`
+BIN = thumbstrip
+
+$(BIN): thumbstrip.c
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
+
+analyze: clean
+	scan-build --status-bugs make
 
 clean:
-	rm -f thumbstrip
+	rm -f $(BIN)
