@@ -52,9 +52,22 @@ struct img {
 	struct pos offset;
 };
 
-int nrows = 1;
-struct img *imgs = NULL;
-struct img *last = NULL;
+struct state {
+	struct img *imgs;
+	struct img *last;
+	struct {
+		char *map;
+		char *out;
+	} file;
+	bool verbose;
+	bool usage;
+	struct {
+		size_t space;
+		size_t ht;
+	} thumb;
+	struct size canvas;
+	size_t nrows;
+};
 
 static void
 print_usage (void)
@@ -82,7 +95,7 @@ magick_error (MagickWand *mw)
 }
 
 static bool
-img_add (char *filename, size_t thumb_ht, bool verbose)
+img_add (char *filename, struct state *state)
 {
 	struct img *i;
 
@@ -99,21 +112,21 @@ img_add (char *filename, size_t thumb_ht, bool verbose)
 		return false;
 	}
 
-	if (verbose)
+	if (state->verbose)
 		fprintf(stderr, "Reading %s\n", i->filename);
 
 	i->mw = NewMagickWand();
-	if (MagickReadImage(i->mw, i->filename) == MagickFalse) {
+	if (MagickReadImage(i->mw, i->filename) == MagickFalse)
 		goto err;
-	}
+
 	i->orig.wd = MagickGetImageWidth(i->mw);
 	i->orig.ht = MagickGetImageHeight(i->mw);
 	i->next = NULL;
 
 	// Scale down the image:
-	i->thumb.ht = thumb_ht;
+	i->thumb.ht = state->thumb.ht;
 	i->thumb.wd = (i->orig.wd * i->thumb.ht) / i->orig.ht;
-	if (verbose) {
+	if (state->verbose) {
 		fprintf(stderr, "Resizing %s from %zdx%zd to %zdx%zd\n"
 			, i->filename
 			, i->orig.wd
@@ -128,11 +141,11 @@ img_add (char *filename, size_t thumb_ht, bool verbose)
 	if (MagickUnsharpMaskImage(i->mw, 1.0, 0.5, 1.0, 1.0) == MagickFalse) {
 		goto err;
 	}
-	if (imgs == NULL) {
-		imgs = last = i;
+	if (state->imgs == NULL) {
+		state->imgs = state->last = i;
 	}
 	else {
-		last = last->next = i;
+		state->last = state->last->next = i;
 	}
 	return true;
 
@@ -144,9 +157,9 @@ err:	magick_error(i->mw);
 }
 
 static void
-imgs_destroy (void)
+imgs_destroy (struct state *state)
 {
-	struct img *i = imgs;
+	struct img *i = state->imgs;
 	struct img *j;
 
 	while (i) {
@@ -161,73 +174,80 @@ imgs_destroy (void)
 }
 
 static bool
-mosaic_layout (const struct size *canvas, size_t thumb_ht, size_t thumb_space)
+mosaic_layout (struct state *state)
 {
 	size_t col = 0;
 	size_t row = 0;
 
-	for (struct img *i = imgs; i; i = i->next) {
-		while (col + i->thumb.wd > canvas->wd) {
+	for (struct img *i = state->imgs; i; i = i->next) {
+		while (col + i->thumb.wd > state->canvas.wd) {
 			if (col == 0) {
 				fprintf(stderr, "Image too large: %s\n", i->filename);
 				return false;
 			}
-			nrows++;
+			state->nrows++;
 			col = 0;
-			row += thumb_ht + thumb_space;
+			row += state->thumb.ht + state->thumb.space;
 		}
 		i->offset.x = col;
 		i->offset.y = row;
-		col += i->thumb.wd + thumb_space;
+		col += i->thumb.wd + state->thumb.space;
 	}
 	return true;
 }
 
 static bool
-mosaic_render (char *filename, const struct size *canvas)
+mosaic_render (const struct state *state)
 {
 	int ret = true;
 	MagickWand *mw = NewMagickWand();
-	PixelWand *pw = NewPixelWand();
+	PixelWand  *pw = NewPixelWand();
 
+	// Create blank canvas image:
 	PixelSetColor(pw, "white");
-	if (MagickNewImage(mw, canvas->wd, canvas->ht, pw) == MagickFalse) {
+	if (MagickNewImage(mw, state->canvas.wd, state->canvas.ht, pw) == MagickFalse) {
 		magick_error(mw);
 		ret = false;
 		goto exit;
 	}
-	for (struct img *i = imgs; i; i = i->next) {
+
+	// Composite thumbnail images onto canvas:
+	for (const struct img *i = state->imgs; i; i = i->next) {
 		if (MagickCompositeImage(mw, i->mw, OverCompositeOp, i->offset.x, i->offset.y) == MagickFalse) {
 			magick_error(mw);
 			ret = false;
 			goto exit;
 		}
 	}
+
+	// Write output image:
 	if (MagickSetImageCompressionQuality(mw, JPEG_QUALITY) == MagickFalse
-	 || MagickWriteImage(mw, filename) == MagickFalse) {
+	 || MagickWriteImage(mw, state->file.out) == MagickFalse) {
 		magick_error(mw);
 		ret = false;
 		goto exit;
 	}
 
+	// Cleanup:
 exit:	DestroyMagickWand(mw);
 	DestroyPixelWand(pw);
+
 	return ret;
 }
 
 static bool
-mosaic_mapfile (char *filename)
+mosaic_mapfile (const struct state *state)
 {
 	FILE *f;
 
-	if (filename == NULL) {
+	if (!state->file.map)
 		return true;
-	}
-	if ((f = fopen(filename, "w")) == NULL) {
+
+	if ((f = fopen(state->file.map, "w")) == NULL) {
 		perror("fopen");
 		return false;
 	}
-	for (struct img *i = imgs; i; i = i->next) {
+	for (const struct img *i = state->imgs; i; i = i->next) {
 		fprintf(f, "%s\t%zd\t%zd\t%zd\t%zd\n"
 			, basename(i->filename)
 			, i->offset.x
@@ -240,83 +260,110 @@ mosaic_mapfile (char *filename)
 	return true;
 }
 
+static void
+parse_options (int argc, char *argv[], struct state *state)
+{
+	int opt;
+
+	// Set defaults:
+	state->nrows       = 1;
+	state->file.out    = DEFAULT_OUTFILE;
+	state->thumb.space = DEFAULT_SPACE;
+	state->thumb.ht    = DEFAULT_HEIGHT;
+	state->canvas.wd   = DEFAULT_WIDTH;
+
+	// Override from options:
+	while ((opt = getopt(argc, argv, "h:m:s:o:w:v?")) != -1) {
+		switch (opt) {
+		case 'h':
+			state->thumb.ht = atoi(optarg);
+			break;
+
+		case 's':
+			state->thumb.space = atoi(optarg);
+			break;
+
+		case 'o':
+			state->file.out = optarg;
+			break;
+
+		case 'w':
+			state->canvas.wd = atoi(optarg);
+			break;
+
+		case 'm':
+			state->file.map = optarg;
+			break;
+
+		case 'v':
+			state->verbose = true;
+			break;
+
+		case '?':
+			state->usage = true;
+			break;
+		}
+	}
+}
+
 int
 main (int argc, char *argv[])
 {
-	int opt;
 	int ret = 0;
-	bool verbose = false;
-	char *mapfile = NULL;
-	char *outfile = DEFAULT_OUTFILE;
-	size_t thumb_space = DEFAULT_SPACE;
-	size_t thumb_height = DEFAULT_HEIGHT;
-	struct size canvas = { .wd = DEFAULT_WIDTH };
+	struct state state = { 0 };
 
-	while ((opt = getopt(argc, argv, "h:m:s:o:w:v?")) != -1) {
-		switch (opt) {
-			case 'h':
-				thumb_height = atoi(optarg);
-				break;
+	// Parse commandline options:
+	parse_options(argc, argv, &state);
 
-			case 's':
-				thumb_space = atoi(optarg);
-				break;
-
-			case 'o':
-				outfile = optarg;
-				break;
-
-			case 'w':
-				canvas.wd = atoi(optarg);
-				break;
-
-			case 'm':
-				mapfile = optarg;
-				break;
-
-			case 'v':
-				verbose = true;
-				break;
-
-			case '?':
-				print_usage();
-				return 0;
-		}
+	// Quick exit if usage text requested:
+	if (state.usage) {
+		print_usage();
+		return ret;
 	}
+
+	// Initialize MagicWand:
 	MagickWandGenesis();
 
 	// Open all images, scale them, add to linked list:
 	for (; optind < argc; optind++) {
-		if (!img_add(argv[optind], thumb_height, verbose)) {
+		if (!img_add(argv[optind], &state)) {
 			ret = 1;
 			goto exit;
 		}
 	}
-	if (imgs == NULL) {
+
+	// Check that we have images:
+	if (!state.imgs) {
 		fprintf(stderr, "No input images given\n\n");
 		print_usage();
 		goto exit;
 	}
+
 	// Layout images into rows:
-	if (!mosaic_layout(&canvas, thumb_height, thumb_space)) {
+	if (!mosaic_layout(&state)) {
 		ret = 1;
 		goto exit;
 	}
-	canvas.ht = nrows * thumb_height + (nrows - 1) * thumb_space;
+
+	// Calculate height of canvas:
+	state.canvas.ht  = state.nrows * state.thumb.ht;
+	state.canvas.ht += (state.nrows - 1) * state.thumb.space;
 
 	// Render output image:
-	if (!mosaic_render(outfile, &canvas)) {
+	if (!mosaic_render(&state)) {
 		ret = 1;
 		goto exit;
 	}
 
 	// Make mapfile if desired:
-	if (!mosaic_mapfile(mapfile)) {
+	if (!mosaic_mapfile(&state)) {
 		ret = 1;
 		goto exit;
 	}
 
-exit:	imgs_destroy();
+	// Cleanup:
+exit:	imgs_destroy(&state);
 	MagickWandTerminus();
+
 	return ret;
 }
