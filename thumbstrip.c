@@ -33,16 +33,23 @@
 #define STR_EXPAND(x)		#x
 #define NUM_TO_STR(x)		STR_EXPAND(x)
 
+struct size {
+	size_t wd;
+	size_t ht;
+};
+
+struct pos {
+	size_t x;
+	size_t y;
+};
+
 struct img {
 	char *filename;
-	size_t orig_wd;
-	size_t orig_ht;
-	size_t thumb_ht;
-	size_t thumb_wd;
-	size_t offs_x;
-	size_t offs_y;
 	struct img *next;
 	MagickWand *mw;
+	struct size orig;
+	struct size thumb;
+	struct pos offset;
 };
 
 int nrows = 1;
@@ -99,23 +106,23 @@ img_add (char *filename, size_t thumb_ht, bool verbose)
 	if (MagickReadImage(i->mw, i->filename) == MagickFalse) {
 		goto err;
 	}
-	i->orig_wd = MagickGetImageWidth(i->mw);
-	i->orig_ht = MagickGetImageHeight(i->mw);
+	i->orig.wd = MagickGetImageWidth(i->mw);
+	i->orig.ht = MagickGetImageHeight(i->mw);
 	i->next = NULL;
 
 	// Scale down the image:
-	i->thumb_ht = thumb_ht;
-	i->thumb_wd = (i->orig_wd * i->thumb_ht) / i->orig_ht;
+	i->thumb.ht = thumb_ht;
+	i->thumb.wd = (i->orig.wd * i->thumb.ht) / i->orig.ht;
 	if (verbose) {
 		fprintf(stderr, "Resizing %s from %zdx%zd to %zdx%zd\n"
 			, i->filename
-			, i->orig_wd
-			, i->orig_ht
-			, i->thumb_wd
-			, i->thumb_ht
+			, i->orig.wd
+			, i->orig.ht
+			, i->thumb.wd
+			, i->thumb.ht
 		);
 	}
-	if (MagickResizeImage(i->mw, i->thumb_wd, i->thumb_ht, SincFilter, 1.0) == MagickFalse) {
+	if (MagickResizeImage(i->mw, i->thumb.wd, i->thumb.ht, SincFilter, 1.0) == MagickFalse) {
 		goto err;
 	}
 	if (MagickUnsharpMaskImage(i->mw, 1.0, 0.5, 1.0, 1.0) == MagickFalse) {
@@ -154,13 +161,13 @@ imgs_destroy (void)
 }
 
 static bool
-mosaic_layout (size_t canvas_wd, size_t thumb_ht, size_t thumb_space)
+mosaic_layout (const struct size *canvas, size_t thumb_ht, size_t thumb_space)
 {
 	size_t col = 0;
 	size_t row = 0;
 
 	for (struct img *i = imgs; i; i = i->next) {
-		while (col + i->thumb_wd > canvas_wd) {
+		while (col + i->thumb.wd > canvas->wd) {
 			if (col == 0) {
 				fprintf(stderr, "Image too large: %s\n", i->filename);
 				return false;
@@ -169,28 +176,28 @@ mosaic_layout (size_t canvas_wd, size_t thumb_ht, size_t thumb_space)
 			col = 0;
 			row += thumb_ht + thumb_space;
 		}
-		i->offs_x = col;
-		i->offs_y = row;
-		col += i->thumb_wd + thumb_space;
+		i->offset.x = col;
+		i->offset.y = row;
+		col += i->thumb.wd + thumb_space;
 	}
 	return true;
 }
 
 static bool
-mosaic_render (char *filename, size_t canvas_width, size_t canvas_height)
+mosaic_render (char *filename, const struct size *canvas)
 {
 	int ret = true;
 	MagickWand *mw = NewMagickWand();
 	PixelWand *pw = NewPixelWand();
 
 	PixelSetColor(pw, "white");
-	if (MagickNewImage(mw, canvas_width, canvas_height, pw) == MagickFalse) {
+	if (MagickNewImage(mw, canvas->wd, canvas->ht, pw) == MagickFalse) {
 		magick_error(mw);
 		ret = false;
 		goto exit;
 	}
 	for (struct img *i = imgs; i; i = i->next) {
-		if (MagickCompositeImage(mw, i->mw, OverCompositeOp, i->offs_x, i->offs_y) == MagickFalse) {
+		if (MagickCompositeImage(mw, i->mw, OverCompositeOp, i->offset.x, i->offset.y) == MagickFalse) {
 			magick_error(mw);
 			ret = false;
 			goto exit;
@@ -223,10 +230,10 @@ mosaic_mapfile (char *filename)
 	for (struct img *i = imgs; i; i = i->next) {
 		fprintf(f, "%s\t%zd\t%zd\t%zd\t%zd\n"
 			, basename(i->filename)
-			, i->offs_x
-			, i->offs_y
-			, i->offs_x + i->thumb_wd
-			, i->offs_y + i->thumb_ht
+			, i->offset.x
+			, i->offset.y
+			, i->offset.x + i->thumb.wd
+			, i->offset.y + i->thumb.ht
 		);
 	}
 	fclose(f);
@@ -243,8 +250,7 @@ main (int argc, char *argv[])
 	char *outfile = DEFAULT_OUTFILE;
 	size_t thumb_space = DEFAULT_SPACE;
 	size_t thumb_height = DEFAULT_HEIGHT;
-	size_t canvas_width = DEFAULT_WIDTH;
-	size_t canvas_height;
+	struct size canvas = { .wd = DEFAULT_WIDTH };
 
 	while ((opt = getopt(argc, argv, "h:m:s:o:w:v?")) != -1) {
 		switch (opt) {
@@ -261,7 +267,7 @@ main (int argc, char *argv[])
 				break;
 
 			case 'w':
-				canvas_width = atoi(optarg);
+				canvas.wd = atoi(optarg);
 				break;
 
 			case 'm':
@@ -292,17 +298,18 @@ main (int argc, char *argv[])
 		goto exit;
 	}
 	// Layout images into rows:
-	if (!mosaic_layout(canvas_width, thumb_height, thumb_space)) {
+	if (!mosaic_layout(&canvas, thumb_height, thumb_space)) {
 		ret = 1;
 		goto exit;
 	}
-	canvas_height = nrows * thumb_height + (nrows - 1) * thumb_space;
+	canvas.ht = nrows * thumb_height + (nrows - 1) * thumb_space;
 
 	// Render output image:
-	if (!mosaic_render(outfile, canvas_width, canvas_height)) {
+	if (!mosaic_render(outfile, &canvas)) {
 		ret = 1;
 		goto exit;
 	}
+
 	// Make mapfile if desired:
 	if (!mosaic_mapfile(mapfile)) {
 		ret = 1;
