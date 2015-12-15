@@ -79,17 +79,22 @@ img_add (char *filename, size_t thumb_ht, bool verbose)
 {
 	struct img *i;
 
+	// Allocate memory for image object:
 	if ((i = malloc(sizeof(*i))) == NULL) {
 		perror("malloc");
 		return false;
 	}
-	if ((i->filename = malloc(strlen(filename) + 1)) == NULL) {
-		perror("malloc");
+
+	// Duplicate filename:
+	if ((i->filename = strdup(filename)) == NULL) {
+		perror("strdup");
 		free(i);
 		return false;
 	}
-	strcpy(i->filename, filename);
-	if (verbose) fprintf(stderr, "Reading %s\n", i->filename);
+
+	if (verbose)
+		fprintf(stderr, "Reading %s\n", i->filename);
+
 	i->mw = NewMagickWand();
 	if (MagickReadImage(i->mw, i->filename) == MagickFalse) {
 		goto err;
