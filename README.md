@@ -55,8 +55,10 @@ self-updating.
 The default output is a portable bitmap (PBM) image to standard output. You can
 create a PNG or a JPEG from it as follows:
 
-    ./thumbstrip a.jpg b.jpg c.jpg | pnmtopng > strip.png
-    ./thumbstrip a.jpg b.jpg c.jpg | cjpeg > strip.jpg
+```sh
+./thumbstrip a.jpg b.jpg c.jpg | pnmtopng > strip.png
+./thumbstrip a.jpg b.jpg c.jpg | cjpeg > strip.jpg
+```
 
 You could also specify `strip.png` or `strip.jpg` directly as the output file
 with the `-o` option, and ImageMagick will do the right thing.
@@ -83,9 +85,11 @@ This software depends on libMagickWand, which is the ImageMagick support
 library. If you have ImageMagick installed, you probably have the library too.
 Download the tarball from the `releases` page, then run the following:
 
-    tar xvzf thumbnail-0.1.tar.gz    # untar the package
-    cd thumbnail-0.1
-    make
+```sh
+tar xvf thumbnail-0.1.tar.gz    # untar the package
+cd thumbnail-0.1
+make
+```
 
 This should compile and link the code against ImageMagick, and create a
 standalone binary in the current directory called `thumbstrip`. You can move or
